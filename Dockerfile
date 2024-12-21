@@ -14,7 +14,7 @@ RUN npm install
 COPY . .
 
 # Expose the HTTP and HTTPS ports defined in your .env file
-EXPOSE 80
+EXPOSE 8765
 EXPOSE 443
 
 # Use the environment variables for configuration

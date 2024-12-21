@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "80:80"       # HTTP traffic
+      - "443:443"     # HTTPS traffic
+    volumes:
+      - .:/usr/src/app  # Mount the project directory for live updates
+      - ./certs:/usr/src/app/certs  # Mount the certs folder for SSL certificates
+    env_file:
+      - .env           # Load environment variables
+    environment:
+      NODE_ENV: production

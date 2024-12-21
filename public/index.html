@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>System Stats</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Basic Reset -->
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+    </style>
+
+    <!-- Main Styles -->
+    <link rel="stylesheet" href="./css/index.css" />
+    <link rel="icon" href="./images/monitor.png" type="image/x-icon">
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav>
+      <div class="logo">My System Stats</div>
+      <div id="status" class="status">Connecting...</div>
+      <ul>
+        <li><a href="#" id="logout">Logout</a></li>
+        <hr />
+        <li><a href="#osInfo" class="nav-link">OSINFO</a></li>
+        <li><a href="#cpu" class="nav-link">CPU</a></li>
+        <li><a href="#cpuCache" class="nav-link">CPU CACHE</a></li>
+        <li><a href="#memLayout" class="nav-link">MEMORY LAYOUT</a></li>
+        <li><a href="#diskLayout" class="nav-link">DISK LAYOUT</a></li>
+        <li><a href="#blockDevices" class="nav-link">BLOCK DEVICES</a></li>
+        <li>
+          <a href="#networkInterfaces" class="nav-link">NETWORK INTERFACES</a>
+        </li>
+        <li><a href="#graphics" class="nav-link">GRAPHICS</a></li>
+        <li><a href="#chassis" class="nav-link">CHASSIS</a></li>
+        <li>
+          <a href="#cpuCurrentSpeed" class="nav-link">CPU CURRENT SPEED</a>
+        </li>
+        <li><a href="#currentLoad" class="nav-link">CURRENT LOAD</a></li>
+        <li><a href="#fullLoad" class="nav-link">FULL LOAD</a></li>
+        <li><a href="#mem" class="nav-link">MEMORY</a></li>
+        <li><a href="#fsSize" class="nav-link">FILE SYSTEM SIZE</a></li>
+        <li><a href="#networkStats" class="nav-link">NETWORK STATS</a></li>
+        <li><a href="#wifiNetworks" class="nav-link">WIFI NETWORKS</a></li>
+        <li><a href="#battery" class="nav-link">BATTERY</a></li>
+        <li><a href="#users" class="nav-link">USERS</a></li>
+      </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main>
+      <div id="stats-container"></div>
+    </main>
+
+    <!-- Optional Footer -->
+    <!-- <footer>© <span id="year"></span> Your Company</footer> -->
+
+    <!-- WebSocket + JavaScript -->
+    <script>
+      // Intersection Observer for navbar
+
+      // Logout functionality
+      document.getElementById("logout").addEventListener("click", (event) => {
+        event.preventDefault(); // Prevent default link behavior
+        localStorage.removeItem("token"); // Remove the token from local storage
+        window.location.href = "/login"; // Redirect to the login page
+      });
+
+      // Dynamically set footer year
+      //document.getElementById("year").textContent = new Date().getFullYear();
+
+      // Create the WebSocket connection
+      const wsUrl = "ws://" + window.location.host;
+      let ws;
+      let reconnectInterval = 5000; // Time interval in milliseconds for reconnection attempts
+
+      const statusEl = document.getElementById("status");
+      const statsContainer = document.getElementById("stats-container");
+
+      // Verify token and redirect if invalid
+      async function verifyToken() {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          window.location.href = "/login";
+          return;
+        }
+
+        try {
+          const response = await fetch("http://localhost:3000/api/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ token }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            window.location.href = "/login";
+          } else {
+            initializeWebSocket(); // Only initialize WebSocket after token verification
+          }
+        } catch (error) {
+          console.error("Error verifying token:", error);
+          window.location.href = "/login";
+        }
+      }
+
+      function initializeWebSocket() {
+        ws = new WebSocket(wsUrl);
+
+        // Handle WebSocket open
+        ws.onopen = function () {
+          statusEl.textContent = "Connected";
+          statusEl.classList.add("connected");
+          statusEl.classList.remove("error");
+        };
+
+        // Handle incoming messages
+        ws.onmessage = function (event) {
+          const data = JSON.parse(event.data);
+          if (Array.isArray(data) && data[0] === "static") {
+            const statsData = data[1];
+            displayStats(statsData);
+          }
+          if (Array.isArray(data) && data[0] === "stats") {
+            const statsData = data[1];
+            displayStats(statsData);
+          }
+        };
+
+        // Handle errors
+        ws.onerror = function (error) {
+          statusEl.textContent = "WebSocket error!";
+          statusEl.classList.add("error");
+          console.error("WebSocket error:", error);
+        };
+
+        // Handle close
+        ws.onclose = function () {
+          statusEl.textContent = "Disconnected (reconnecting...)";
+          statusEl.classList.remove("connected");
+
+          // Attempt reconnection after a delay
+          setTimeout(() => {
+            initializeWebSocket();
+          }, reconnectInterval);
+        };
+      }
+
+      // Call verifyToken on page load
+      verifyToken();
+
+      // Display stats in collapsible sections
+      function displayStats(statsData) {
+        // Clear existing content
+        // statsContainer.innerHTML = "";
+
+        // We assume 'statsData' might be an object with keys for categories
+        // If your data is just a big JSON, you can simply do one <details>.
+        // But let's assume we have multiple keys to show.
+
+        // For example, if statsData has categories like "cpu", "memory", "disk"
+        // We'll create a <details> for each.
+        if (typeof statsData === "object" && statsData !== null) {
+          Object.keys(statsData).forEach((key) => {
+            if (key == "osInfo") {
+              // Get data and create Element
+              osInfoEl = document.createElement("div");
+              osInfoEl.classList.add("item");
+              osInfoEl.id = "osInfo";
+              document.getElementById("stats-container").appendChild(osInfoEl);
+
+              let platform = statsData[key].platform;
+              let distro = statsData[key].distro;
+              let release = statsData[key].release;
+              let kernel = statsData[key].kernel;
+              let arch = statsData[key].arch;
+              let hostname = statsData[key].hostname;
+              let fqdn = statsData[key].fqdn;
+              let codepage = statsData[key].codepage;
+              let logofile = statsData[key].logofile;
+              let serial = statsData[key].serial;
+              let remoteSession = statsData[key].remoteSession;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>Your platform is <strong>${platform}</strong>, running the <strong>${distro}</strong> distribution.</p>
+                        <p>The release version is <strong>${release}</strong>, paired with kernel <strong>${kernel}</strong>.</p>
+                        <p>Your architecture is <strong>${arch}</strong>, ensuring compatibility and performance.</p>
+                        <p>The hostname of this machine is <strong>${hostname}</strong>, and its fully qualified domain name is <strong>${fqdn}</strong>.</p>
+                        <p>Supporting details include codepage <strong>${codepage}</strong>, logo file <strong>${logofile}</strong>, and serial <strong>${serial}</strong>.</p>
+                        <p>Finally, the system is currently in a <strong>${remoteSession}</strong> remote session.</p>
+
+                      `;
+              osInfoEl.innerHTML = info;
+            } else if (key == "cpu") {
+              cpuEl = document.createElement("div");
+              cpuEl.classList.add("item");
+              cpuEl.id = "cpu";
+              document.getElementById("stats-container").appendChild(cpuEl);
+
+              let brand = statsData[key].brand;
+              let cache = statsData[key].cache;
+              let cores = statsData[key].cores;
+              let flags = statsData[key].flags;
+              let manufacturer = statsData[key].manufacturer;
+              let model = statsData[key].model;
+              let performanceCores = statsData[key].performanceCores;
+              let physicalCores = statsData[key].physicalCores;
+              let processors = statsData[key].processors;
+              let speed = statsData[key].speed;
+              let stepping = statsData[key].stepping;
+              let vendor = statsData[key].vendor;
+              let virtualization = statsData[key].virtualization;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The processor is from the <strong>${brand}</strong> brand, model <strong>${model}</strong>,<br> featuring cache levels of <strong>L1d: ${cache.l1d}, L1i: ${cache.l1i}, L2: ${cache.l2}, L3: ${cache.l3}</strong>.</p>
+                        <p>It features a total of <strong>${cores}</strong> cores, including <strong>${physicalCores}</strong> physical cores and <strong>${performanceCores}</strong> performance cores.</p>
+                        <p>The system has <strong>${processors}</strong> processors, each running at a speed of <strong>${speed}</strong> GHz.</p>
+                        <p>The processor is built by <strong>${manufacturer}</strong>.</p>
+                        <p>This processor supports advanced features,<br> including <strong>${flags}</strong><br> flags for enhanced functionality.</p>
+                        <p>It operates at a stepping level of <strong>${stepping}</strong>, ensuring stable performance.</p>
+                        <p>Additionally, it offers virtualization capabilities, supported by the <strong>${vendor}</strong> vendor.</p>
+                      `;
+
+              cpuEl.innerHTML = info;
+            } else if (key == "cpuCache") {
+              cpuCacheEl = document.createElement("div");
+              cpuCacheEl.classList.add("item");
+              cpuCacheEl.id = "cpuCache";
+              document
+                .getElementById("stats-container")
+                .appendChild(cpuCacheEl);
+
+              let l1d = statsData[key].l1d;
+              let l1i = statsData[key].l1i;
+              let l2 = statsData[key].l2;
+              let l3 = statsData[key].l3;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>Your CPU cache includes <strong>${l1d}</strong> of L1d, <strong>${l1i}</strong> of L1i, <strong>${l2}</strong> of L2, and <strong>${l3}</strong> of L3.</p>
+                      `;
+
+              cpuCacheEl.innerHTML = info;
+            } else if (key == "memLayout") {
+              memLayoutEl = document.createElement("div");
+              memLayoutEl.classList.add("item");
+              memLayoutEl.id = "memLayout";
+              document
+                .getElementById("stats-container")
+                .appendChild(memLayoutEl);
+
+              let bank = statsData[key][0].bank;
+              let size = statsData[key][0].size;
+              let type = statsData[key][0].type;
+              let ecc = statsData[key][0].ecc;
+              let clockSpeed = statsData[key][0].clockSpeed;
+              let formFactor = statsData[key][0].formFactor;
+              let manufacturer = statsData[key][0].manufacturer;
+              let partNum = statsData[key][0].partNum;
+              let serialNum = statsData[key][0].serialNum;
+              let voltageConfigured = statsData[key][0].voltageConfigured;
+              let voltageMin = statsData[key][0].voltageMin;
+              let voltageMax = statsData[key][0].voltageMax;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>Memory bank <strong>${bank}</strong> is installed, with a size of <strong>${size}</strong> GB.</p>
+                        <p>This memory is of type <strong>${type}</strong>, featuring <strong>${ecc}</strong> error correction capabilities.</p>
+                        <p>It operates at a clock speed of <strong>${clockSpeed}</strong> MHz, with a form factor of <strong>${formFactor}</strong>.</p>
+                        <p>Manufactured by <strong>${manufacturer}</strong>, this memory has part number <strong>${partNum}</strong> and serial number <strong>${serialNum}</strong>.</p>
+                        <p>It is configured to operate at a voltage of <strong>${voltageConfigured}</strong> V, with a range of <strong>${voltageMin}</strong> V to <strong>${voltageMax}</strong> V.</p>
+                      `;
+
+              memLayoutEl.innerHTML = info;
+            } else if (key == "diskLayout") {
+              diskLayoutEl = document.createElement("div");
+              diskLayoutEl.classList.add("item");
+              diskLayoutEl.id = "diskLayout";
+              document
+                .getElementById("stats-container")
+                .appendChild(diskLayoutEl);
+
+              let device = statsData[key][0].device;
+              let type = statsData[key][0].type;
+              let name = statsData[key][0].name;
+              let vendor = statsData[key][0].vendor;
+              let size = statsData[key][0].size;
+              let bytesPerSector = statsData[key][0].bytesPerSector;
+              let totalCylinders = statsData[key][0].totalCylinders;
+              let totalHeads = statsData[key][0].totalHeads;
+              let totalSectors = statsData[key][0].totalSectors;
+              let totalTracks = statsData[key][0].totalTracks;
+              let tracksPerCylinder = statsData[key][0].tracksPerCylinder;
+              let sectorsPerTrack = statsData[key][0].sectorsPerTrack;
+              let firmwareRevision = statsData[key][0].firmwareRevision;
+              let serialNum = statsData[key][0].serialNum;
+              let interfaceType = statsData[key][0].interfaceType;
+              let smartStatus = statsData[key][0].smartStatus;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The disk <strong>${device}</strong> is a <strong>${type}</strong> device, named <strong>${name}</strong>.</p>
+                        <p>It is manufactured by <strong>${vendor}</strong>, with a total size of <strong>${size}</strong> GB.</p>
+                        <p>Operating with <strong>${bytesPerSector}</strong> bytes per sector, it has a total of <strong>${totalCylinders}</strong> cylinders, <strong>${totalHeads}</strong> heads, <strong>${totalSectors}</strong> sectors, and <strong>${totalTracks}</strong> tracks.</p>
+                        <p>Each cylinder has <strong>${tracksPerCylinder}</strong> tracks, and each track has <strong>${sectorsPerTrack}</strong> sectors.</p>
+                        <p>It features firmware revision <strong>${firmwareRevision}</strong> and serial number <strong>${serialNum}</strong>.</p>
+                        <p>Connected via <strong>${interfaceType}</strong>, the disk has a SMART status of <strong>${smartStatus}</strong>.</p>
+                      `;
+              diskLayoutEl.innerHTML = info;
+            } else if (key == "blockDevices") {
+              blockDevicesEl = document.createElement("div");
+              blockDevicesEl.classList.add("item");
+              blockDevicesEl.id = "blockDevices";
+              document
+                .getElementById("stats-container")
+                .appendChild(blockDevicesEl);
+
+              let name = statsData[key][0].name;
+              let type = statsData[key][0].type;
+              let fsType = statsData[key][0].fsType;
+              let mount = statsData[key][0].mount;
+              let size = statsData[key][0].size;
+              let physical = statsData[key][0].physical;
+              let uuid = statsData[key][0].uuid;
+              let label = statsData[key][0].label;
+              let model = statsData[key][0].model;
+              let serial = statsData[key][0].serial;
+              let removable = statsData[key][0].removable;
+              let protocol = statsData[key][0].protocol;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The block device <strong>${name}</strong> is a <strong>${type}</strong> device, formatted with <strong>${fsType}</strong>.</p>
+                        <p>It is mounted at <strong>${mount}</strong>, with a total size of <strong>${size}</strong> GB.</p>
+                        <p>This device is <strong>${physical}</strong> and has a UUID of <strong>${uuid}</strong>.</p>
+                        <p>It is labeled as <strong>${label}</strong>, with a model of <strong>${model}</strong> and serial number <strong>${serial}</strong>.</p>
+                        <p>It is <strong>${removable}</strong> and operates via <strong>${protocol}</strong>.</p>
+                      `;
+              blockDevicesEl.innerHTML = info;
+            } else if (key == "networkInterfaces") {
+              networkInterfacesEl = document.createElement("div");
+              networkInterfacesEl.classList.add("item");
+              networkInterfacesEl.id = "networkInterfaces";
+              document
+                .getElementById("stats-container")
+                .appendChild(networkInterfacesEl);
+
+              let iface = statsData[key][0].iface;
+              let ip4 = statsData[key][0].ip4;
+              let ip6 = statsData[key][0].ip6;
+              let mac = statsData[key][0].mac;
+              let internal = statsData[key][0].internal;
+              let virtual = statsData[key][0].virtual;
+              let operstate = statsData[key][0].operstate;
+              let type = statsData[key][0].type;
+              let duplex = statsData[key][0].duplex;
+              let mtu = statsData[key][0].mtu;
+              let speed = statsData[key][0].speed;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The network interface <strong>${iface}</strong> has an IPv4 address of <strong>${ip4}</strong> and an IPv6 address of <strong>${ip6}</strong>.</p>
+                        <p>It has a MAC address of <strong>${mac}</strong>, and internal-virtual is <strong>${internal}</strong> and <strong>${virtual}</strong>.</p>
+                        <p>Currently, the interface is in <strong>${operstate}</strong> state, operating at <strong>${type}</strong>.</p>
+                        <p>It is set to <strong>${duplex}</strong> duplex, with an MTU of <strong>${mtu}</strong> and a speed of <strong>${speed}</strong> Mbps.</p>
+                      `;
+              networkInterfacesEl.innerHTML = info;
+            } else if (key == "graphics") {
+              graphicsEl = document.createElement("div");
+              graphicsEl.classList.add("item");
+              graphicsEl.id = "graphics";
+              document
+                .getElementById("stats-container")
+                .appendChild(graphicsEl);
+
+              let info = "";
+              let main = statsData[key];
+              if (main.controllers && Array.isArray(main.controllers)) {
+                main.controllers.forEach((controller, index) => {
+                  let bus = controller.bus;
+                  let vram = controller.vram;
+                  let vramDynamic = controller.vramDynamic;
+                  let vendor = controller.vendor;
+                  let model = controller.model;
+                  let subDevice = controller.subDevice;
+                  info += `<h2>${key.toUpperCase()}</h2>
+                            <p>Controller ${index + 1}:</p>
+                            <p>Bus: <strong>${bus}</strong>, VRAM: <strong>${vram}</strong>, VRAM Dynamic: <strong>${vramDynamic}</strong></p>
+                            <p>Vendor: <strong>${vendor}</strong>, Model: <strong>${model}</strong>, SubDevice: <strong>${subDevice}</strong></p>
+                          `;
+                });
+              }
+              if (main.displays && Array.isArray(main.displays)) {
+                main.displays.forEach((main, index) => {
+                  let resolutionx = main.resolutionx;
+                  let resolutiony = main.resolutiony;
+                  let pixelDepth = main.pixelDepth;
+                  let builtin = main.builtin;
+                  let currentRefreshRate = main.currentRefreshRate;
+                  let connection = main.connection;
+                  let deviceName = main.deviceName;
+                  let main2 = main.main;
+                  let model = main.model;
+                  let positionX = main.positionX;
+                  let positionY = main.positionY;
+                  let sizeX = main.sizeX;
+                  let sizeY = main.sizeY;
+                  let vendor = main.vendor;
+
+                  info += `<h2>${key.toUpperCase()}</h2>
+                              <p>Display ${index + 1}:</p>
+                              <p>Resolution: <strong>${resolutionx}x${resolutiony}</strong>, Pixel Depth: <strong>${pixelDepth}</strong></p>
+                              <p>Builtin: <strong>${builtin}</strong>, Current Refresh Rate: <strong>${currentRefreshRate}</strong></p>
+                              <p>Connection: <strong>${connection}</strong>, Device Name: <strong>${deviceName}</strong></p>
+                              <p>Main: <strong>${main2}</strong>, Model: <strong>${model}</strong></p>
+                              <p>Position: <strong>${positionX}x${positionY}</strong>, Size: <strong>${sizeX}x${sizeY}</strong></p>
+                              <p>Vendor: <strong>${vendor}</strong></p>
+                            `;
+                });
+              }
+              graphicsEl.innerHTML = info;
+            } else if (key == "chassis") {
+              chasssisEl = document.createElement("div");
+              chasssisEl.classList.add("item");
+              chasssisEl.id = "chassis";
+              document
+                .getElementById("stats-container")
+                .appendChild(chasssisEl);
+
+              let assetTag = statsData[key].assetTag;
+              let manufacturer = statsData[key].manufacturer;
+              let serial = statsData[key].serial;
+              let version = statsData[key].version;
+              let type = statsData[key].type;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>Chassis asset tag is <strong>${assetTag}</strong>, manufactured by <strong>${manufacturer}</strong>.</p>
+                        <p>It has a serial number of <strong>${serial}</strong>, version <strong>${version}</strong>, and is of type <strong>${type}</strong>.</p>
+                      `;
+              chasssisEl.innerHTML = info;
+            } else if (key == "cpuCurrentSpeed") {
+              let avg = statsData[key].avg;
+              let min = statsData[key].min;
+              let max = statsData[key].max;
+              let cores = statsData[key].cores;
+              if (document.getElementById("cpuCurrentSpeed")) {
+                let innit =
+                  document.getElementById("cpuCurrentSpeed").innerHTML;
+              } else {
+                cpuCurrentSpeedEl = document.createElement("div");
+                cpuCurrentSpeedEl.classList.add("item");
+                cpuCurrentSpeedEl.id = "cpuCurrentSpeed";
+                document
+                  .getElementById("stats-container")
+                  .appendChild(cpuCurrentSpeedEl);
+
+                let info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The average CPU speed is <strong>${avg}</strong> GHz, with a minimum of <strong>${min}</strong> GHz and a maximum of <strong>${max}</strong> GHz.</p>
+                        <p>Each core is running at <strong>${cores}</strong> GHz.</p>
+                      `;
+
+                cpuCurrentSpeedEl.innerHTML = info;
+              }
+            } else if (key == "currentLoad") {
+              if (document.getElementById("currentLoad")) {
+                document.getElementById("currentLoad").remove();
+              }
+              currentLoadEl = document.createElement("div");
+              currentLoadEl.classList.add("item");
+              currentLoadEl.id = "currentLoad";
+              document
+                .getElementById("stats-container")
+                .appendChild(currentLoadEl);
+
+              let currentload = Number(statsData[key].currentLoad).toFixed(2);
+              let currentloadidle = Number(
+                statsData[key].currentLoadIdle
+              ).toFixed(2);
+              let currentloadirq = Number(
+                statsData[key].currentLoadIrq
+              ).toFixed(2);
+              let currentloadsystem = Number(
+                statsData[key].currentLoadSystem
+              ).toFixed(2);
+              let currentloaduser = Number(
+                statsData[key].currentLoadUser
+              ).toFixed(2);
+              let rawcurrentload = statsData[key].rawCurrentLoad;
+              let rawcurrentloadidle = statsData[key].rawCurrentLoadIdle;
+              let rawcurrentloadirq = statsData[key].rawCurrentLoadIrq;
+              let rawcurrentloadsystem = statsData[key].rawCurrentLoadSystem;
+              let rawcurrentloaduser = statsData[key].rawCurrentLoadUser;
+              let cpus = statsData[key].cpus;
+              const info = `<h2>${key.toUpperCase()}</h2>
+                          <p>The current load is <strong>${currentload}</strong>%.</p>
+                          <p>Idle load is <strong>${currentloadidle}</strong>%, IRQ load is <strong>${currentloadirq}</strong>%, system load is <strong>${currentloadsystem}</strong>%, and user load is <strong>${currentloaduser}</strong>%.</p>
+                          <p>Raw current load is <strong>${rawcurrentload}</strong>%, with idle load of <strong>${rawcurrentloadidle}</strong>%, IRQ load of <strong>${rawcurrentloadirq}</strong>%, system load of <strong>${rawcurrentloadsystem}</strong>%, and user load of <strong>${rawcurrentloaduser}</strong>%.</p>
+                          
+                        `;
+              currentLoadEl.innerHTML = info;
+            } else if (key == "fullLoad") {
+              if (document.getElementById("fullLoad")) {
+                document.getElementById("fullLoad").remove();
+              }
+              fullLoadEl = document.createElement("div");
+              fullLoadEl.classList.add("item");
+              fullLoadEl.id = "fullLoad";
+              document
+                .getElementById("stats-container")
+                .appendChild(fullLoadEl);
+
+              let it = Number(statsData[key]).toFixed(2);
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p style="font-size:4rem">The full load is <strong>${it}</strong>.</p>
+                      `;
+              fullLoadEl.innerHTML = info;
+            } else if (key == "mem") {
+              if (document.getElementById("mem")) {
+                document.getElementById("mem").remove();
+              }
+              memEl = document.createElement("div");
+              memEl.classList.add("item");
+              memEl.id = "mem";
+              document.getElementById("stats-container").appendChild(memEl);
+
+              let active = statsData[key].active;
+              let available = statsData[key].available;
+              let buffcache = statsData[key].buffcache;
+              let buffers = statsData[key].buffers;
+              let cached = statsData[key].cached;
+              let dirty = statsData[key].dirty;
+              let free = statsData[key].free;
+              let slab = statsData[key].slab;
+              let swapfree = statsData[key].swapfree;
+              let swaptotal = statsData[key].swaptotal;
+              let swapused = statsData[key].swapused;
+              let total = statsData[key].total;
+              let used = statsData[key].used;
+              let writeback = statsData[key].writeback;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                  <p>Active memory is <strong>${active}</strong> bytes.</p>
+                  <p>Available memory is <strong>${available}</strong> bytes.</p>
+                  <p>Buffer cache is <strong>${buffcache}</strong> bytes.</p>
+                  <p>Buffers are <strong>${buffers}</strong> bytes.</p>
+                  <p>Cached memory is <strong>${cached}</strong> bytes.</p>
+                  <p>Dirty memory is <strong>${dirty}</strong> bytes.</p>
+                  <p>Free memory is <strong>${free}</strong> bytes.</p>
+                  <p>Slab memory is <strong>${slab}</strong> bytes.</p>
+                  <p>Swap free is <strong>${swapfree}</strong> bytes.</p>
+                  <p>Swap total is <strong>${swaptotal}</strong> bytes.</p>
+                  <p>Swap used is <strong>${swapused}</strong> bytes.</p>
+                  <p>Total memory is <strong>${total}</strong> bytes.</p>
+                  <p>Used memory is <strong>${used}</strong> bytes.</p>
+                  <p>Writeback memory is <strong>${writeback}</strong> bytes.</p>
+                `;
+              memEl.innerHTML = info;
+            } else if (key == "fsSize") {
+              if (document.getElementById("fsSize")) {
+                document.getElementById("fsSize").remove();
+              }
+              fsSizeEl = document.createElement("div");
+              fsSizeEl.classList.add("item");
+              fsSizeEl.id = "fsSize";
+              document.getElementById("stats-container").appendChild(fsSizeEl);
+
+              let fs = statsData[key][0].available;
+              let mount = statsData[key][0].mount;
+              let rw = statsData[key][0].rw;
+              let size = statsData[key][0].size;
+              let type = statsData[key][0].type;
+              let use = statsData[key][0].use;
+              let used = statsData[key][0].used;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>File system <strong>${fs}</strong> is mounted at <strong>${mount}</strong>.</p>
+                        <p>It is of type <strong>${type}</strong>, with a total size of <strong>${size}</strong> bytes.</p>
+                        <p>Currently, it is <strong>${use}</strong>% used, with <strong>${used}</strong> bytes used.</p>
+                      `;
+              fsSizeEl.innerHTML = info;
+            } else if (key == "networkStats") {
+              if (document.getElementById("networkStats")) {
+                document.getElementById("networkStats").remove();
+              }
+              networkStatsEl = document.createElement("div");
+              networkStatsEl.classList.add("item");
+              networkStatsEl.id = "networkStats";
+              document
+                .getElementById("stats-container")
+                .appendChild(networkStatsEl);
+
+              let iface = statsData[key][0].iface;
+              let ms = statsData[key][0].ms;
+              let operstate = statsData[key][0].operstate;
+              let rx_bytes = statsData[key][0].rx_bytes;
+              let rx_dropped = statsData[key][0].rx_dropped;
+              let rx_errors = statsData[key][0].rx_errors;
+              let rx_sec = statsData[key][0].rx_sec;
+              let tx_bytes = statsData[key][0].tx_bytes;
+              let tx_dropped = statsData[key][0].tx_dropped;
+              let tx_errors = statsData[key][0].tx_errors;
+              let tx_sec = statsData[key][0].tx_sec;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The network interface <strong>${iface}</strong> is in <strong>${operstate}</strong> state.</p>
+                        <p>It has a latency of <strong>${ms}</strong> ms.</p>
+                        <p>Received bytes: <strong>${rx_bytes}</strong>, dropped: <strong>${rx_dropped}</strong>, errors: <strong>${rx_errors}</strong>, and rate: <strong>${rx_sec}</strong> bytes/sec.</p>
+                        <p>Transmitted bytes: <strong>${tx_bytes}</strong>, dropped: <strong>${tx_dropped}</strong>, errors: <strong>${tx_errors}</strong>, and rate: <strong>${tx_sec}</strong> bytes/sec.</p>
+                      `;
+              networkStatsEl.innerHTML = info;
+            } else if (key == "wifiNetworks") {
+              if (document.getElementById("wifiNetworks")) {
+                document.getElementById("wifiNetworks").remove();
+              }
+              wifiNetworksEl = document.createElement("div");
+              wifiNetworksEl.classList.add("item");
+              wifiNetworksEl.id = "wifiNetworks";
+              document
+                .getElementById("stats-container")
+                .appendChild(wifiNetworksEl);
+
+              let ssid = statsData[key][0].ssid;
+              let bssid = statsData[key][0].bssid;
+              let mode = statsData[key][0].mode;
+              let channel = statsData[key][0].channel;
+              let frequency = statsData[key][0].frequency;
+              let signalLevel = statsData[key][0].signalLevel;
+              let quality = statsData[key][0].quality;
+              let security = statsData[key][0].security;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                  <p>The first WiFi network with SSID <strong>${ssid}</strong> and BSSID <strong>${bssid}</strong> operates in <strong>${mode}</strong> mode on channel <strong>${channel}</strong> at a frequency of <strong>${frequency}</strong> GHz.</p>
+                  <p>It has a signal level of <strong>${signalLevel}</strong> dBm and a quality of <strong>${quality}</strong>%.</p>
+                  <p>The network security is <strong>${security}</strong>.</p>
+                  `;
+              wifiNetworksEl.innerHTML = info;
+            } else if (key == "battery") {
+              if (document.getElementById("battery"))
+                document.getElementById("battery").remove();
+              batteryEl = document.createElement("div");
+              batteryEl.classList.add("item");
+              batteryEl.id = "battery";
+              document.getElementById("stats-container").appendChild(batteryEl);
+
+              let acConnected = statsData[key].acConnected;
+              let capacityUnit = statsData[key].capacityUnit;
+              let currentCapacity = statsData[key].currentCapacity;
+              let cycleCount = statsData[key].cycleCount;
+              let designedCapacity = statsData[key].designedCapacity;
+              let hasBattery = statsData[key].hasBattery;
+              let isCharging = statsData[key].isCharging;
+              let manufacturer = statsData[key].manufacturer;
+              let maxCapacity = statsData[key].maxCapacity;
+              let model = statsData[key].model;
+              let percent = statsData[key].percent;
+              let serial = statsData[key].serial;
+              let timeRemaining = statsData[key].timeRemaining;
+              let type = statsData[key].type;
+              let voltage = statsData[key].voltage;
+
+              let info = `<h2>${key.toUpperCase()}</h2>
+              <p>The battery is <strong>${hasBattery}</strong> and <strong>${acConnected}</strong> to AC power.</p>
+              <p>It has a current capacity of <strong>${currentCapacity}</strong> ${capacityUnit}, with a cycle count of <strong>${cycleCount}</strong>.</p>
+              <p>The designed capacity is <strong>${designedCapacity}</strong> ${capacityUnit}, and the maximum capacity is <strong>${maxCapacity}</strong> ${capacityUnit}.</p>
+              <p>The battery is <strong>${isCharging}</strong> and has a charge of <strong>${percent}</strong>%.</p>
+              <p>It has a model of <strong>${model}</strong> and a voltage of <strong>${voltage}</strong>.</p>
+
+              `;
+              if (percent <= 20) {
+                info += `
+                
+              <div class="battery-container" style=" width: 300px;
+                    height: 40px;
+                    border: 2px solid #000;
+                    border-radius: 8px;
+                    margin: 20px auto;
+                    position: relative;
+                    background-color: #f0f0f0;">
+                <div class="battery-level" id="batteryLevel" style="  height: 100%;
+                    border-radius: 6px;
+                    transition: width 0.3s, background-color 0.3s;
+                    width: ${Number(percent)}%;background-color: red;">
+                    </div>
+            </div>`;
+              } else if (percent <= 50) {
+                info += `
+                
+                <div class="battery-container" style=" width: 300px;
+                      height: 40px;
+                      border: 2px solid #000;
+                      border-radius: 8px;
+                      margin: 20px auto;
+                      position: relative;
+                      background-color: #f0f0f0;">
+                  <div class="battery-level" id="batteryLevel" style="  height: 100%;
+                      border-radius: 6px;
+                      transition: width 0.3s, background-color 0.3s;
+                      width: ${Number(percent)}%;background-color: yellow;">
+                      </div>
+              </div>`;
+              } else {
+                info += `
+                
+                <div class="battery-container" style=" width: 300px;
+                      height: 40px;
+                      border: 2px solid #000;
+                      border-radius: 8px;
+                      margin: 20px auto;
+                      position: relative;
+                      background-color: #f0f0f0;">
+                  <div class="battery-level" id="batteryLevel" style="  height: 100%;
+                      border-radius: 6px;
+                      transition: width 0.3s, background-color 0.3s;
+                      width: ${Number(percent)}%;background-color: green;">
+                      </div>
+              </div>`;
+              }
+
+              batteryEl.innerHTML = info;
+            } else if (key == "users") {
+              if (document.getElementById("users")) {
+                document.getElementById("users").remove();
+              }
+              usersEl = document.createElement("div");
+              usersEl.classList.add("item");
+              usersEl.id = "users";
+              document.getElementById("stats-container").appendChild(usersEl);
+
+              let user = statsData[key][0].user;
+              let date = statsData[key][0].date;
+              let time = statsData[key][0].time;
+
+              const info = `<h2>${key.toUpperCase()}</h2>
+                        <p>The user <strong>${user}</strong> logged in on <strong>${date}</strong> at <strong>${time}</strong>.</p>
+                      `;
+              usersEl.innerHTML = info;
+            }
+          });
+        } else {
+          // If it's something else, just display the JSON
+          const detailsEl = document.createElement("details");
+          const summaryEl = document.createElement("summary");
+          summaryEl.textContent = "SYSTEM DATA";
+          const preEl = document.createElement("pre");
+          preEl.textContent = JSON.stringify(statsData, null, 2);
+
+          detailsEl.appendChild(summaryEl);
+          detailsEl.appendChild(preEl);
+          statsContainer.appendChild(detailsEl);
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -4,12 +4,14 @@ services:
   backend:
     build: .
     ports:
-      - "1035:8765"       # HTTP traffic
-      - "1035:443"     # HTTPS traffic
+      - "1034:443"  # Map external 1035 to internal 443 for HTTPS
+      - "1034:80"   # Map external 1035 to internal 80 for HTTP
     volumes:
-      - .:/usr/src/app  # Mount the project directory for live updates
-      - ./certs:/usr/src/app/certs  # Mount the certs folder for SSL certificates
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
     env_file:
-      - .env           # Load environment variables
+      - .env
     environment:
-      NODE_ENV: production
+      - NODE_ENV=production
+      - HTTPS_PORT=443
+      - HTTP_PORT=80

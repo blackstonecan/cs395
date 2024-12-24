@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -89,6 +90,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="register-container">
         <form class="register-form" id="registerForm">
@@ -113,7 +115,7 @@
     </div>
 
     <script>
-        const apiBaseUrl = "https://localhost:443/api";
+        const apiBaseUrl = `${window.location.protocol}//${window.location.host}`;
 
         // Handle Register Form Submission
         document.getElementById("registerForm").addEventListener("submit", async (event) => {
@@ -129,7 +131,7 @@
             }
 
             try {
-                const response = await fetch(`${apiBaseUrl}/register`, {
+                const response = await fetch(`${apiBaseUrl}/api/register`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
@@ -141,7 +143,7 @@
 
                 if (response.ok && data.success && data.token) {
                     localStorage.setItem("token", data.token); // Save token in localStorage
-                    window.location.href = "/"; // Redirect to the dashboard
+                    window.location.href = "/monitor"; // Redirect to the dashboard
                 } else {
                     alert("Registration failed: " + (data.message || "Unknown error"));
                 }
@@ -152,4 +154,5 @@
         });
     </script>
 </body>
+
 </html>

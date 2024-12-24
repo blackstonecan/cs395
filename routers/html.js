@@ -6,7 +6,7 @@ const { getIndex, get404, getLogin, getRegister } = require("../controllers");
 const router = express.Router();
 const BASE_URL = path.join(__dirname, "..", "public");
 
-router.get("/", getIndex);
+router.get("/monitor", getIndex);
 router.get("/login", getLogin);
 router.get("/register", getRegister);
 router.use(get404);

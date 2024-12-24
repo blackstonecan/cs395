@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login Page</title>
-     <link rel="icon" href="./images/login.png" type="image/x-icon" />
+    <link rel="icon" href="./images/login.png" type="image/x-icon" />
 
-     <style>
+    <style>
         body {
             font-family: Arial, sans-serif;
             background: linear-gradient(135deg, #6e8efb, #a777e3);
@@ -88,8 +89,9 @@
         .login-options a:hover {
             text-decoration: underline;
         }
-     </style>
+    </style>
 </head>
+
 <body>
     <div class="login-container">
         <form class="login-form" id="loginForm">
@@ -110,7 +112,8 @@
     </div>
 
     <script>
-        const apiBaseUrl = "https://localhost:443/api";
+
+        const apiBaseUrl = `${window.location.protocol}//${window.location.host}`;
 
         // Handle Login Form Submission
         document.getElementById("loginForm").addEventListener("submit", async (event) => {
@@ -120,7 +123,7 @@
             const password = document.getElementById("password").value;
 
             try {
-                const response = await fetch(`${apiBaseUrl}/login`, {
+                const response = await fetch(`${apiBaseUrl}/api/login`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
@@ -132,7 +135,7 @@
 
                 if (response.ok && data.success && data.token) {
                     localStorage.setItem("token", data.token); // Save token in localStorage
-                    window.location.href = "/"; // Redirect to the dashboard
+                    window.location.href = "/monitor"; // Redirect to the dashboard
                 } else {
                     alert("Login failed");
                 }
@@ -143,4 +146,5 @@
         });
     </script>
 </body>
+
 </html>

@@ -52,7 +52,15 @@ httpsServer.listen(httpsPort, () => {
 
 // 7. Setup WebSocket on the HTTPS server
 const wss = getWss(httpsServer);
-wss.on("connection", wssOn);
+wss.on("connection", (ws, request) => {
+  if (request.url === "/ws") {
+    console.log("WebSocket connection established at /ws");
+    wssOn(ws);
+  } else {
+    console.log(`Invalid WebSocket request URL: ${request.url}`);
+    ws.close();
+  }
+});
 
 // 8. Create and start HTTP server for redirection
 const httpApp = express();
